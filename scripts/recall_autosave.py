@@ -12,6 +12,7 @@ Reads JSON from stdin containing: session_id, cwd, transcript_path (from Claude 
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -36,14 +37,24 @@ def _normalize_path(path_str: str) -> str:
     return path_str
 
 
+def _safe_load_json(file_path) -> dict:
+    """Load JSON file with fallback to fix unescaped Windows backslashes."""
+    with open(file_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        fixed = re.sub(r'(?<!\\)\\(?![\\"/bfnrtu])', r'\\\\', raw)
+        return json.loads(fixed)
+
+
 def _find_base_path() -> Path:
     """Find the central directory from _config.json or use default."""
     default = Path(_normalize_path(DEFAULT_BASE_PATH))
     config_path = default / "_config.json"
     if config_path.exists():
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            config = _safe_load_json(config_path)
             bp = config.get("basePath", DEFAULT_BASE_PATH)
             return Path(_normalize_path(bp))
         except Exception:
@@ -70,8 +81,7 @@ def _find_current_session_file(cwd: str) -> tuple:
         idx_file = proj_dir / "sessions-index.json"
         if idx_file.exists():
             try:
-                with open(idx_file, "r", encoding="utf-8") as f:
-                    idx = json.load(f)
+                idx = _safe_load_json(idx_file)
                 for entry in idx.get("entries", []):
                     proj_path = entry.get("projectPath", "")
                     if proj_path and os.path.normcase(os.path.normpath(proj_path)) == \
@@ -123,8 +133,7 @@ def _find_saved_session(base_path: Path, session_id: str) -> tuple:
         return None, None
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = _safe_load_json(config_path)
     except Exception:
         return None, None
 
@@ -134,8 +143,7 @@ def _find_saved_session(base_path: Path, session_id: str) -> tuple:
             continue
         for meta_file in cat_dir.glob("*_meta.json"):
             try:
-                with open(meta_file, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+                meta = _safe_load_json(meta_file)
                 if meta.get("sessionId") == session_id:
                     return meta_file, meta
             except Exception:

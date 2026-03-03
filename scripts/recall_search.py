@@ -17,6 +17,7 @@ import json
 import math
 import os
 import platform
+import re
 import sqlite3
 import struct
 import sys
@@ -41,6 +42,17 @@ def _normalize_path(path_str: str) -> str:
         drive_letter = path_str[1].upper()
         return f"{drive_letter}:{path_str[2:]}".replace("/", "\\")
     return path_str
+
+
+def _safe_load_json(file_path) -> dict:
+    """Load JSON file with fallback to fix unescaped Windows backslashes."""
+    with open(file_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        fixed = re.sub(r'(?<!\\)\\(?![\\"/bfnrtu])', r'\\\\', raw)
+        return json.loads(fixed)
 
 
 def _get_db_path(base_path: Path) -> Path:
@@ -80,8 +92,7 @@ def _get_openai_key() -> str:
     config_path = base_path / "_config.json"
     if config_path.exists():
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            config = _safe_load_json(config_path)
             key = config.get("openai_api_key", "")
             if key:
                 return key
@@ -155,8 +166,7 @@ def _load_all_sessions(base_path: Path) -> list:
     if not config_path.exists():
         return []
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = _safe_load_json(config_path)
     except Exception:
         return []
 
@@ -167,8 +177,7 @@ def _load_all_sessions(base_path: Path) -> list:
             continue
         for meta_file in cat_dir.glob("*_meta.json"):
             try:
-                with open(meta_file, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+                meta = _safe_load_json(meta_file)
                 meta["_meta_path"] = str(meta_file)
                 sessions.append(meta)
             except Exception:

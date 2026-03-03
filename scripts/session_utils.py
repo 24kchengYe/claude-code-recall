@@ -32,6 +32,22 @@ def _normalize_path(path_str: str) -> str:
     return path_str
 
 
+def _safe_load_json(file_path) -> dict:
+    """Load JSON file with fallback to fix unescaped Windows backslashes.
+
+    Claude Code and SKILL.md sometimes write paths like C:\\Users instead of C:\\\\Users
+    in JSON files, which is invalid JSON. This function handles that gracefully.
+    """
+    with open(file_path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Fix unescaped backslashes: match \ not preceded by \ and not followed by valid escape char
+        fixed = re.sub(r'(?<!\\)\\(?![\\"/bfnrtu])', r'\\\\', raw)
+        return json.loads(fixed)
+
+
 def extract_session(jsonl_path: str, mode: str = "brief", max_messages: int = 30, max_chars: int = 500) -> str:
     """Extract readable conversation content from a session .jsonl file.
 
@@ -172,8 +188,7 @@ def _load_all_sessions(base_path: Path, category: str = None) -> list:
         return []
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = _safe_load_json(config_path)
     except Exception:
         return []
 
@@ -186,8 +201,7 @@ def _load_all_sessions(base_path: Path, category: str = None) -> list:
             continue
         for meta_file in cat_dir.glob("*_meta.json"):
             try:
-                with open(meta_file, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+                meta = _safe_load_json(meta_file)
                 sessions.append(meta)
             except Exception:
                 continue
@@ -324,8 +338,7 @@ def stats_sessions(base_dir: str) -> str:
         return "Error: _config.json not found."
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = _safe_load_json(config_path)
     except Exception as e:
         return f"Error reading config: {e}"
 
@@ -341,8 +354,7 @@ def stats_sessions(base_dir: str) -> str:
         count = 0
         for meta_file in cat_dir.glob("*_meta.json"):
             try:
-                with open(meta_file, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+                meta = _safe_load_json(meta_file)
                 all_sessions.append(meta)
                 count += 1
             except Exception:
@@ -405,8 +417,7 @@ def check_sessions(base_dir: str) -> str:
         return "Error: _config.json not found."
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        config = _safe_load_json(config_path)
     except Exception as e:
         return f"Error reading config: {e}"
 
@@ -419,8 +430,7 @@ def check_sessions(base_dir: str) -> str:
             continue
         for meta_file in cat_dir.glob("*_meta.json"):
             try:
-                with open(meta_file, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
+                meta = _safe_load_json(meta_file)
                 name = meta.get("name", "unnamed")
                 original = meta.get("originalSessionFile", "")
                 if original and Path(original).exists():
