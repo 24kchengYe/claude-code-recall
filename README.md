@@ -1,6 +1,6 @@
-# Recall — Cross-Project Session Manager for Claude Code
+# Recall — Never Lose a Claude Code Conversation Again
 
-> **Cross-project memory and session management — without sacrificing Claude Code's security model.**
+> **Cross-project session manager with category organization, version history, and anti-compaction backup — without sacrificing Claude Code's security model.**
 
 ## Why Recall?
 
@@ -143,17 +143,17 @@ When you rename a session in Recall, it updates **both** the central index and t
 ### From Skills CLI (Recommended)
 
 ```bash
-npx skills add 24kchengYe/recall
+npx skills add 24kchengYe/claude-code-recall
 ```
 
 ### Manual Installation
 
 ```bash
 # macOS / Linux
-git clone https://github.com/24kchengYe/recall.git ~/.claude/skills/recall
+git clone https://github.com/24kchengYe/claude-code-recall.git ~/.claude/skills/recall
 
 # Windows
-git clone https://github.com/24kchengYe/recall.git %USERPROFILE%\.claude\skills\recall
+git clone https://github.com/24kchengYe/claude-code-recall.git %USERPROFILE%\.claude\skills\recall
 ```
 
 ## Requirements
