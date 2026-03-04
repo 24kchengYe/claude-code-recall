@@ -259,7 +259,7 @@ def list_sessions(base_dir: str, category: str = None, sort_by: str = "modified"
                 modified = modified[:10]
             lines.append(f"{i:<4} {name:<25} {cat:<8} {str(count):<6} {modified:<12}")
             # Summary line
-            summary = s.get("summary", "")
+            summary = s.get("abstract", "")
             if summary:
                 lines.append(f"     {summary}")
             # Tags + project line
@@ -285,7 +285,7 @@ def list_sessions(base_dir: str, category: str = None, sort_by: str = "modified"
             modified = s.get("modified", "?")
             if isinstance(modified, str) and len(modified) >= 10:
                 modified = modified[:10]
-            summary = s.get("summary", "")
+            summary = s.get("abstract", "")
             preview = _truncate(summary, 30) if summary else "-"
             lines.append(f"{i:<4} {name:<25} {cat:<8} {str(count):<6} {modified:<12} {preview:<30}")
 
@@ -319,7 +319,7 @@ def search_sessions(base_dir: str, keyword: str, category: str = None) -> str:
     for s in sessions:
         searchable = " ".join([
             s.get("name", ""),
-            s.get("summary", ""),
+            s.get("abstract", ""),
             s.get("firstPrompt", ""),
             " ".join(s.get("tags", [])),
         ]).lower()
@@ -345,7 +345,7 @@ def search_sessions(base_dir: str, keyword: str, category: str = None) -> str:
         modified = s.get("modified", "?")
         if isinstance(modified, str) and len(modified) >= 10:
             modified = modified[:10]
-        summary = s.get("summary", "")
+        summary = s.get("abstract", "")
         preview = _truncate(summary, 30) if summary else "-"
         lines.append(f"{i:<4} {name:<25} {cat:<8} {str(count):<6} {modified:<12} {preview:<30}")
 
@@ -901,15 +901,15 @@ def summarize_session(jsonl_path: str, max_summary_chars: int = 300) -> dict:
         max_summary_chars: Maximum characters for the summary text
 
     Returns:
-        dict with 'summary' (str) and 'tags' (list of str)
+        dict with 'abstract' (str) and 'tags' (list of str)
     """
     path = Path(_normalize_path(jsonl_path))
     if not path.exists():
-        return {"summary": "", "tags": []}
+        return {"abstract": "", "tags": []}
 
     entries = _parse_jsonl_entries(path)
     if not entries:
-        return {"summary": "", "tags": []}
+        return {"abstract": "", "tags": []}
 
     data = _extract_session_data(entries)
     user_messages = data["user_messages"]
@@ -918,7 +918,7 @@ def summarize_session(jsonl_path: str, max_summary_chars: int = 300) -> dict:
     file_counts = data["file_counts"]
 
     if not user_messages:
-        return {"summary": "", "tags": []}
+        return {"abstract": "", "tags": []}
 
     # Filter out messages containing skip patterns (system reminders, etc.)
     # so they don't pollute keyword-based classification
@@ -942,7 +942,7 @@ def summarize_session(jsonl_path: str, max_summary_chars: int = 300) -> dict:
     tags = _extract_tags(clean_messages, assistant_messages,
                          tool_uses, file_counts, activities)
 
-    return {"summary": summary, "tags": tags}
+    return {"abstract": summary, "tags": tags}
 
 
 def _extract_tags(user_msgs: list, asst_msgs: list, tool_uses: list,

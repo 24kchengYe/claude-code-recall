@@ -175,17 +175,20 @@ def _count_messages(jsonl_path: Path) -> int:
 def _generate_summary(jsonl_path: Path) -> dict:
     """Generate a basic summary from the session file.
 
-    Returns dict with 'summary' and 'tags' keys.
+    Returns dict with 'abstract' and 'tags' keys.
     """
     try:
         # Import summarize from session_utils if available
         script_dir = Path(__file__).parent
         sys.path.insert(0, str(script_dir))
         from session_utils import summarize_session
-        return summarize_session(str(jsonl_path))
+        result = summarize_session(str(jsonl_path))
+        # Normalize: summarize_session returns "summary" key, we use "abstract"
+        if "summary" in result and "abstract" not in result:
+            result["abstract"] = result.pop("summary")
+        return result
     except (ImportError, AttributeError):
-        # Fallback: return empty summary
-        return {"summary": "", "tags": []}
+        return {"abstract": "", "tags": []}
 
 
 def _git_commit(base_path: Path, files: list, message: str):
@@ -283,8 +286,8 @@ def main():
         meta["modified"] = now
         meta["saved"] = now
         meta["messageCount"] = msg_count
-        if summary_data.get("summary"):
-            meta["summary"] = summary_data["summary"]
+        if summary_data.get("abstract"):
+            meta["abstract"] = summary_data["abstract"]
         if summary_data.get("tags"):
             meta["tags"] = summary_data["tags"]
 

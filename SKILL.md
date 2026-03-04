@@ -65,7 +65,7 @@ Recall is a centralized session management system for Claude Code. It solves the
   "modified": "ISO 8601",
   "messageCount": 42,
   "firstPrompt": "first message preview...",
-  "summary": "session summary",
+  "abstract": "session summary",
   "tags": []
 }
 ```
@@ -158,8 +158,8 @@ options:
    - **If found (previously saved)** → **Auto-update mode**:
      - Skip name/category selection — reuse existing name and category
      - Overwrite the `.jsonl` backup with the latest version: `cp` source → existing `backupFile` path
-     - **Generate/update summary** (v2.0): run `python session_utils.py summarize "{backupFile}"` to get structured summary + tags, update `_meta.json` fields `summary` and `tags`
-     - Update `_meta.json`: refresh `modified` timestamp, `messageCount`, `saved` timestamp, `summary`, `tags`
+     - **Generate/update summary** (v2.0): run `python session_utils.py summarize "{backupFile}"` to get structured summary + tags, update `_meta.json` fields `abstract` and `tags`
+     - Update `_meta.json`: refresh `modified` timestamp, `messageCount`, `saved` timestamp, `abstract`, `tags`
      - **Update search index** (v2.0): run `python recall_search.py index-one "{basePath}" "{sessionId}"` to refresh the embedding
      - **Git commit**: run `cd "{basePath}" && git add "{category}/{name}.jsonl" "{category}/{name}_meta.json" && git commit -m "update: {name} ({category}) - {messageCount}条消息"`
      - Report: "已自动更新备份: {name} ({category})"
@@ -174,7 +174,7 @@ options:
    - If user chose a new category: create the subdirectory and update `_config.json`
    - Copy the `.jsonl` file to `{basePath}/{category}/{name}.jsonl` using Bash `cp`
    - **Generate summary** (v2.0): run `python session_utils.py summarize "{basePath}/{category}/{name}.jsonl"` to get structured summary + tags
-   - Create `{basePath}/{category}/{name}_meta.json` with all metadata (including `summary` and `tags` from the generated summary)
+   - Create `{basePath}/{category}/{name}_meta.json` with all metadata (including `abstract` and `tags` from the generated summary)
    - **Sync name back to Claude local storage**:
      - Read `sessions-index.json` and check if an entry with matching sessionId exists
      - If entry exists: update its `summary` field to the user-defined name
@@ -411,7 +411,7 @@ Note: Summary quality depends on reindex. After upgrading to the new summary for
 1. List sessions, user selects one to rename
 2. Show current name, ask for new name via `AskUserQuestion`
 3. **Bidirectional sync**:
-   a. Update `_meta.json`: change `name` and `summary` fields
+   a. Update `_meta.json`: change `name` field
    b. Rename files in central directory:
       - `{old_name}_meta.json` → `{new_name}_meta.json`
       - `{old_name}.jsonl` → `{new_name}.jsonl`
@@ -519,7 +519,7 @@ Layer 1: Category Overview → Layer 2: Session List → Layer 3: Session Detail
    来源项目: {originalProject}
    创建时间: {created}
    最后修改: {modified}
-   摘要: {summary}
+   摘要: {abstract}
    首条消息: {firstPrompt前80字}
    标签: {tags}
    ```
@@ -714,7 +714,7 @@ Automatically retrieves and injects relevant historical session summaries based 
    python "C:\Users\ASUS\.claude\skills\recall\scripts\recall_search.py" search "{basePath}" "{extracted_topic}" --top-k 3
    ```
 3. **Parse results**: Extract the JSON results from the script output (after "--- JSON ---" marker)
-4. **Load summaries**: For each matched session, read its `_meta.json` to get the `summary` field
+4. **Load summaries**: For each matched session, read its `_meta.json` to get the `abstract` field
 5. **Display injected context**:
    ```
    --- 相关历史上下文 (自动检索) ---
@@ -793,12 +793,12 @@ Regenerate summaries and rebuild the search index for all saved sessions. Essent
 1. Read `_config.json` to get basePath and categories
 2. **Phase 1: Regenerate summaries** for sessions that need it:
    - For each `_meta.json` in all categories:
-     - Read existing `summary` and `tags` from `_meta.json`
-     - **Skip if existing summary is good**: If `summary` is non-empty AND >= 30 characters, **preserve it** and skip to the next session. Report: "跳过 (已有摘要): {name}"
+     - Read existing `abstract` and `tags` from `_meta.json`
+     - **Skip if existing summary is good**: If `abstract` is non-empty AND >= 30 characters, **preserve it** and skip to the next session. Report: "跳过 (已有摘要): {name}"
      - Only for sessions with empty/short summary: Find the corresponding `.jsonl` backup file
      - Run: `python session_utils.py summarize "{backupFile}"`
      - Parse the JSON output (summary + tags)
-     - Update `_meta.json` with the new `summary` and `tags` fields
+     - Update `_meta.json` with the new `abstract` and `tags` fields
      - Report progress: "正在处理: {name} ({category})..."
    - **Force mode**: If the user explicitly says "强制重建" or passes `--force`, overwrite ALL summaries regardless of existing content
 3. **Phase 2: Rebuild search index**:

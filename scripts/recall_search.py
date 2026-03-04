@@ -68,7 +68,7 @@ def _init_db(db_path: Path) -> sqlite3.Connection:
             session_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             category TEXT NOT NULL,
-            summary TEXT,
+            abstract TEXT,
             tags TEXT,
             first_prompt TEXT,
             embedding BLOB,
@@ -190,8 +190,8 @@ def _build_search_text(meta: dict) -> str:
     parts = []
     if meta.get("name"):
         parts.append(f"会话名称: {meta['name']}")
-    if meta.get("summary"):
-        parts.append(f"摘要: {meta['summary']}")
+    if meta.get("abstract"):
+        parts.append(f"摘要: {meta['abstract']}")
     if meta.get("firstPrompt"):
         parts.append(f"首条消息: {meta['firstPrompt'][:200]}")
     if meta.get("tags"):
@@ -241,14 +241,14 @@ def index_all(base_dir: str) -> str:
 
             conn.execute("""
                 INSERT OR REPLACE INTO sessions
-                (session_id, name, category, summary, tags, first_prompt,
+                (session_id, name, category, abstract, tags, first_prompt,
                  embedding, embedding_model, indexed_at, meta_path)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 session_id,
                 meta.get("name", ""),
                 meta.get("category", ""),
-                meta.get("summary", ""),
+                meta.get("abstract", ""),
                 json.dumps(meta.get("tags", []), ensure_ascii=False),
                 meta.get("firstPrompt", ""),
                 embedding_blob,
@@ -353,20 +353,20 @@ def semantic_search(base_dir: str, query: str, top_k: int = 5) -> str:
 
         # Load all sessions with embeddings
         rows = conn.execute("""
-            SELECT session_id, name, category, summary, tags, first_prompt, embedding, meta_path
+            SELECT session_id, name, category, abstract, tags, first_prompt, embedding, meta_path
             FROM sessions WHERE embedding IS NOT NULL
         """).fetchall()
 
         results = []
         for row in rows:
-            sid, name, category, summary, tags, fp, emb_blob, meta_path = row
+            sid, name, category, abstract, tags, fp, emb_blob, meta_path = row
             emb = _blob_to_embedding(emb_blob)
             sim = _cosine_similarity(query_embedding, emb)
             results.append({
                 "session_id": sid,
                 "name": name,
                 "category": category,
-                "summary": summary,
+                "abstract": abstract,
                 "tags": tags,
                 "first_prompt": fp,
                 "similarity": sim,
@@ -390,7 +390,7 @@ def semantic_search(base_dir: str, query: str, top_k: int = 5) -> str:
             sim_str = f"{r['similarity']:.3f}"
             name = r["name"][:24] if r["name"] else "unnamed"
             cat = r["category"] or "?"
-            summary_preview = (r["summary"] or r["first_prompt"] or "")[:38]
+            summary_preview = (r["abstract"] or r["first_prompt"] or "")[:38]
             if len(summary_preview) == 38:
                 summary_preview += ".."
             lines.append(f"{i:<4} {sim_str:<8} {name:<25} {cat:<8} {summary_preview:<40}")
@@ -399,7 +399,7 @@ def semantic_search(base_dir: str, query: str, top_k: int = 5) -> str:
         lines.append("")
         lines.append("--- JSON ---")
         json_results = [{"session_id": r["session_id"], "name": r["name"],
-                         "category": r["category"], "summary": r["summary"],
+                         "category": r["category"], "abstract": r["abstract"],
                          "similarity": round(r["similarity"], 4),
                          "meta_path": r["meta_path"]} for r in results]
         lines.append(json.dumps(json_results, ensure_ascii=False))
@@ -425,16 +425,16 @@ def keyword_search(base_dir: str, query: str) -> str:
     query_lower = query.lower()
 
     rows = conn.execute("""
-        SELECT session_id, name, category, summary, tags, first_prompt, meta_path
+        SELECT session_id, name, category, abstract, tags, first_prompt, meta_path
         FROM sessions
     """).fetchall()
     conn.close()
 
     results = []
     for row in rows:
-        sid, name, category, summary, tags, fp, meta_path = row
+        sid, name, category, abstract, tags, fp, meta_path = row
         searchable = " ".join([
-            name or "", summary or "", tags or "", fp or "", category or ""
+            name or "", abstract or "", tags or "", fp or "", category or ""
         ]).lower()
 
         # Calculate keyword relevance score
@@ -452,7 +452,7 @@ def keyword_search(base_dir: str, query: str) -> str:
                 "session_id": sid,
                 "name": name,
                 "category": category,
-                "summary": summary,
+                "abstract": abstract,
                 "score": score,
                 "meta_path": meta_path
             })
@@ -479,7 +479,7 @@ def keyword_search(base_dir: str, query: str) -> str:
     lines.append("")
     lines.append("--- JSON ---")
     json_results = [{"session_id": r["session_id"], "name": r["name"],
-                     "category": r["category"], "summary": r["summary"],
+                     "category": r["category"], "abstract": r["abstract"],
                      "score": r["score"],
                      "meta_path": r["meta_path"]} for r in results[:10]]
     lines.append(json.dumps(json_results, ensure_ascii=False))
@@ -498,7 +498,7 @@ def _keyword_search_filesystem(base_path: Path, query: str) -> str:
 
     for s in sessions:
         searchable = " ".join([
-            s.get("name", ""), s.get("summary", ""),
+            s.get("name", ""), s.get("abstract", ""),
             s.get("firstPrompt", ""), " ".join(s.get("tags", [])),
             s.get("category", "")
         ]).lower()
