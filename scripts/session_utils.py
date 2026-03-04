@@ -655,11 +655,11 @@ _SKIP_PATTERNS = [
     "/recall",
     "<command-message>",
     "<system-reminder>",
-    "session_utils.py",
-    "recall_search.py",
-    "recall_autosave.py",
     "[Request interrupted",
     "<local-command-caveat>",
+    "Cancel Ralph",
+    "cancel ralph",
+    "/ralph",
 ]
 
 
@@ -697,6 +697,8 @@ def _extract_topic(user_messages: list) -> str:
         "Implement the following plan:",
         "Implement the following plan：",
         "implement the plan:",
+        "Plan:",
+        "Plan：",
     ]
     for prefix in _PREFIX_PATTERNS:
         if topic_msg.lower().startswith(prefix.lower()):
@@ -705,6 +707,12 @@ def _extract_topic(user_messages: list) -> str:
 
     # Strip leading markdown headers (# anything)
     topic_msg = re.sub(r'^#+\s*', '', topic_msg).strip()
+
+    # Re-apply prefix stripping (e.g., "# Plan: ..." → "Plan: ..." after header strip)
+    for prefix in _PREFIX_PATTERNS:
+        if topic_msg.lower().startswith(prefix.lower()):
+            topic_msg = topic_msg[len(prefix):].strip()
+            break
 
     if not topic_msg:
         return "未知主题"
@@ -715,7 +723,7 @@ def _extract_topic(user_messages: list) -> str:
 
     # Long messages: extract first sentence (use earliest valid separator)
     best_idx = len(topic_msg)
-    for sep in ["。", ".\n", "\n", ". "]:
+    for sep in ["。", "？", "！", "；", ".\n", "\n", ". "]:
         idx = topic_msg.find(sep)
         if 10 < idx < 120 and idx < best_idx:
             best_idx = idx
@@ -760,11 +768,14 @@ def _classify_activity(user_messages: list, tool_uses: list, file_counts: Counte
     if bug_count >= 3:
         labels.append("问题修复")
 
-    # 简历修改 (word boundary; only override if no strong file-type signal already)
-    cv_count = sum(len(re.findall(pat, all_user_text))
-                   for pat in [r"简历", r"\bcv\b", r"\bresume\b", r"\bcurriculum\b"])
-    if cv_count >= 3 and not (tex_files or code_files):
-        labels = ["简历修改"]
+    # 简历修改 — two signals: file names containing cv/resume, and keyword 简历
+    # Note: \bresume\b excluded (ambiguous with "resume session")
+    cv_file_signal = any(re.search(r'(cv|resume|简历)', f, re.IGNORECASE) for f in file_counts)
+    jianli_count = all_user_text.count("简历")
+    if cv_file_signal and jianli_count >= 1:
+        labels = ["简历修改"]  # Strong signal: override previous labels
+    elif jianli_count >= 3 and not labels:
+        labels.append("简历修改")
 
     # 资料检索
     if "WebSearch" in tool_set or "WebFetch" in tool_set:
@@ -909,14 +920,27 @@ def summarize_session(jsonl_path: str, max_summary_chars: int = 300) -> dict:
     if not user_messages:
         return {"summary": "", "tags": []}
 
+    # Filter out messages containing skip patterns (system reminders, etc.)
+    # so they don't pollute keyword-based classification
+    clean_messages = [msg for msg in user_messages
+                      if not any(pat in msg for pat in _SKIP_PATTERNS)
+                      and len(msg.strip()) >= 5]
+
     topic = _extract_topic(user_messages)
-    activities = _classify_activity(user_messages, tool_uses, file_counts)
     key_files = _extract_key_files(file_counts)
+
+    # Fallback topic from key files if topic extraction failed
+    if topic == "未知主题" and key_files:
+        topic = f"涉及 {', '.join(key_files[:3])} 的工作"
+
+    # Use clean_messages for classification even if empty — avoids system-reminder
+    # content polluting keyword matches. Tool/file signals still work on empty text.
+    activities = _classify_activity(clean_messages, tool_uses, file_counts)
     summary = _build_natural_summary(topic, activities, key_files,
                                      user_messages, max_summary_chars)
 
-    tags = _extract_tags(user_messages, assistant_messages, tool_uses,
-                         file_counts, activities)
+    tags = _extract_tags(clean_messages, assistant_messages,
+                         tool_uses, file_counts, activities)
 
     return {"summary": summary, "tags": tags}
 
@@ -970,18 +994,20 @@ def _extract_tags(user_msgs: list, asst_msgs: list, tool_uses: list,
                 tags.add(activity_to_tag[act])
 
     # Domain keyword tags (require 2+ occurrences in user text)
+    # Only high-signal keywords — removed noisy ones: test/测试, 设计/design, api, 论文/paper
     all_user_text = " ".join(user_msgs).lower()
     keyword_map = {
-        "论文": "论文", "paper": "论文", "arxiv": "论文",
-        "test": "测试", "pytest": "测试", "unittest": "测试",
+        "arxiv": "论文",
         "refactor": "重构", "重构": "重构",
         "docker": "docker", "container": "docker",
-        "api": "api", "endpoint": "api",
-        "database": "数据库", "sql": "数据库",
-        "设计": "设计", "design": "设计",
+        "database": "数据库", "数据库": "数据库",
+        "机器学习": "机器学习", "deep learning": "机器学习",
+        "pytorch": "机器学习", "tensorflow": "机器学习",
     }
+    # Skip tags that already exist from activity classification
+    existing_tag_values = set(tags)
     for keyword, tag in keyword_map.items():
-        if all_user_text.count(keyword) >= 2:
+        if tag not in existing_tag_values and all_user_text.count(keyword) >= 2:
             tags.add(tag)
 
     return sorted(tags)[:8]
