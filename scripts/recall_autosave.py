@@ -191,6 +191,40 @@ def _generate_summary(jsonl_path: Path) -> dict:
         return {"abstract": "", "tags": []}
 
 
+def _sync_name_to_sessions_index(session_id: str, name: str, cwd: str):
+    """Write the Recall session name back to Claude's sessions-index.json.
+
+    Claude Code auto-generates its own summary, overwriting the user-defined name.
+    This re-syncs Recall's name after each autosave so /resume shows the correct name.
+    """
+    cwd_normalized = _normalize_path(cwd)
+
+    if not CLAUDE_PROJECTS_DIR.exists():
+        return
+
+    for proj_dir in CLAUDE_PROJECTS_DIR.iterdir():
+        if not proj_dir.is_dir() or proj_dir.name.startswith("."):
+            continue
+        idx_file = proj_dir / "sessions-index.json"
+        if not idx_file.exists():
+            continue
+        try:
+            idx = _safe_load_json(idx_file)
+            entries = idx.get("entries", [])
+            updated = False
+            for entry in entries:
+                if entry.get("sessionId") == session_id:
+                    if entry.get("summary") != name:
+                        entry["summary"] = name
+                        updated = True
+                    break
+            if updated:
+                with open(idx_file, "w", encoding="utf-8") as f:
+                    json.dump(idx, f, ensure_ascii=False, indent=2)
+        except Exception:
+            continue
+
+
 def _git_commit(base_path: Path, files: list, message: str):
     """Stage files and commit in the central directory's git repo."""
     try:
@@ -293,6 +327,10 @@ def main():
 
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
+
+        # Sync Recall name back to Claude's sessions-index.json
+        # (prevents Claude Code from overwriting the user-defined name)
+        _sync_name_to_sessions_index(session_id, name, cwd)
 
         # Git commit
         rel_backup = backup_path.relative_to(base_path)
